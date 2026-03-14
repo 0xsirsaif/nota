@@ -27,7 +27,8 @@ function TitleBar() {
   return (
     <div style={{ height: '32px', display: 'flex', alignItems: 'center', background: 'var(--background)', borderBottom: '1px solid var(--border)', userSelect: 'none' }}>
       {/* Draggable area */}
-      <div data-tauri-drag-region style={{ flex: 1, display: 'flex', alignItems: 'center', height: '100%', paddingLeft: '12px' }}>
+      <div data-tauri-drag-region style={{ flex: 1, display: 'flex', alignItems: 'center', height: '100%', paddingLeft: '12px', gap: '8px' }}>
+        <img src="/icon.png" alt="Nota" style={{ width: '18px', height: '18px', borderRadius: '4px' }} />
         <span style={{ fontSize: '13px', fontWeight: 500 }}>Nota</span>
       </div>
 

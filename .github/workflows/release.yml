@@ -1,0 +1,206 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # Build for Linux
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '--target x86_64-unknown-linux-gnu'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+
+  # Build for macOS (Intel)
+  build-macos-intel:
+    runs-on: macos-13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: x86_64-apple-darwin
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '--target x86_64-apple-darwin'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel-artifacts
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app
+
+  # Build for macOS (Apple Silicon)
+  build-macos-arm:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '--target aarch64-apple-darwin'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm-artifacts
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app
+
+  # Build for Windows
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '--target x86_64-pc-windows-msvc'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+
+  # Create release with all artifacts
+  create-release:
+    needs: [build-linux, build-macos-intel, build-macos-arm, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/linux-artifacts/*
+            artifacts/macos-intel-artifacts/*
+            artifacts/macos-arm-artifacts/*
+            artifacts/windows-artifacts/*
+          draft: true
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

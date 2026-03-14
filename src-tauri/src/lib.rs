@@ -5,6 +5,7 @@ pub mod models;
 
 use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
 
+
 #[tauri::command]
 async fn greet(name: String) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -20,7 +21,29 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
+
             // Create menu with standard edit commands
+            // macOS has different menu conventions - Edit menu is standard
+            #[cfg(target_os = "macos")]
+            let edit_menu = {
+                let submenu = Submenu::with_items(
+                    app.handle(),
+                    "Edit",
+                    true,
+                    &[
+                        &PredefinedMenuItem::undo(app.handle(), None::<&str>)?,
+                        &PredefinedMenuItem::redo(app.handle(), None::<&str>)?,
+                        &PredefinedMenuItem::separator(app.handle())?,
+                        &PredefinedMenuItem::cut(app.handle(), None::<&str>)?,
+                        &PredefinedMenuItem::copy(app.handle(), None::<&str>)?,
+                        &PredefinedMenuItem::paste(app.handle(), None::<&str>)?,
+                        &PredefinedMenuItem::select_all(app.handle(), None::<&str>)?,
+                    ],
+                )?;
+                submenu
+            };
+
+            #[cfg(not(target_os = "macos"))]
             let edit_menu = Submenu::with_items(
                 app.handle(),
                 "Edit",
