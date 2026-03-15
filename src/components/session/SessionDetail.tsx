@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Play, Pause, Square, Clock, Trash2, Edit3, X, Check, HelpCircle, CheckCircle2, XCircle } from "lucide-react";
+import { Trash2, Edit3, X, Check, HelpCircle, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +14,10 @@ import {
 } from "@/components/ui/dialog";
 import { useSessionStore, useTimerStore } from "@/stores";
 import { Session, SessionStatus } from "@/types";
-import { formatDuration, formatDateTime } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
 import { SmartGoalCard } from "./SmartGoalCard";
 import { NotesEditor } from "@/components/editor/NotesEditor";
+import { SessionHeaderTimer } from "./SessionHeaderTimer";
 
 interface SessionDetailProps {
   session: Session;
@@ -208,9 +209,21 @@ export function SessionDetail({ session }: SessionDetailProps) {
             ) : (
               <>
                 <h1 className="text-base font-medium truncate">{session.title}</h1>
-                <Badge variant="subtle" className={cn("text-xs capitalize", statusColors[session.status])}>
-                  {session.status}
-                </Badge>
+                {session.status === "completed" ? (
+                  <Badge variant="subtle" className={cn("text-xs capitalize", statusColors[session.status])}>
+                    {session.status}
+                  </Badge>
+                ) : (
+                  <SessionHeaderTimer
+                    session={session}
+                    elapsedSeconds={currentElapsed}
+                    timerState={timerState}
+                    onStart={handleStart}
+                    onPause={handlePause}
+                    onResume={handleResume}
+                    onStop={handleStop}
+                  />
+                )}
               </>
             )}
           </div>
@@ -240,66 +253,6 @@ export function SessionDetail({ session }: SessionDetailProps) {
         {/* SMART Goal */}
         <div className="mb-5">
           <SmartGoalCard session={session} />
-        </div>
-
-        {/* Timer Section */}
-        <div className="mb-5 p-4 rounded-lg border bg-muted/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-background flex items-center justify-center border">
-                <Clock className={cn("h-4 w-4 text-muted-foreground", timerState === "running" && "text-foreground")} />
-              </div>
-              <div>
-                <div className="text-3xl font-mono font-medium tracking-tight tabular-nums">
-                  {formatDuration(currentElapsed)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {session.status === "active" ? "Recording time..." : session.status === "paused" ? "Timer paused" : "Ready to start"}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              {session.status === "planned" && (
-                <Button onClick={handleStart} size="sm" className="gap-1.5">
-                  <Play className="h-3.5 w-3.5" />
-                  Start
-                </Button>
-              )}
-              {session.status === "active" && (
-                <>
-                  <Button onClick={handlePause} variant="outline" size="sm" className="gap-1.5">
-                    <Pause className="h-3.5 w-3.5" />
-                    Pause
-                  </Button>
-                  <Button onClick={handleStop} variant="secondary" size="sm" className="gap-1.5">
-                    <Square className="h-3.5 w-3.5" />
-                    Stop
-                  </Button>
-                </>
-              )}
-              {session.status === "paused" && (
-                <>
-                  <Button onClick={handleResume} size="sm" className="gap-1.5">
-                    <Play className="h-3.5 w-3.5" />
-                    Resume
-                  </Button>
-                  <Button onClick={handleStop} variant="secondary" size="sm" className="gap-1.5">
-                    <Square className="h-3.5 w-3.5" />
-                    Stop
-                  </Button>
-                </>
-              )}
-              {session.status === "completed" && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Session completed</span>
-                  <Button variant="outline" size="sm" onClick={handleStart}>
-                    Restart
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Tabs */}
