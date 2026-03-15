@@ -47,6 +47,16 @@
     "copyright": "",
     "shortDescription": "A study session app for intentional learning",
     "longDescription": "Nota helps you create focused study sessions with SMART goals, track your time, and sync with Toggl Track.",
+    "linux": {
+      "deb": {
+        "files": {}
+      },
+      "rpm": {
+        "epoch": 0,
+        "release": "1",
+        "files": {}
+      }
+    },
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "10.13"

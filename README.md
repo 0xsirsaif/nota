@@ -104,6 +104,34 @@ State Machine:
   PLANNED → ACTIVE (start) → PAUSED (pause) → ACTIVE (resume) → COMPLETED (stop)
 ```
 
+## CI/CD
+
+The release workflow uses GitHub Actions with aggressive caching for faster builds:
+
+- **Rust caching** via `Swatinem/rust-cache@v2` - caches Cargo registry and dependencies
+- **sccache** via `mozilla-actions/sccache-action@v0.0.9` - caches compiled Rust artifacts
+- **pnpm caching** via `actions/setup-node@v4` with `cache: 'pnpm'`
+
+### Testing Workflows Locally with `act`
+
+To test the workflow locally with [`act`](https://github.com/nektos/act):
+
+```bash
+# Install act first: https://nektosact.com/install/index.html
+
+# Run Linux build (recommended - fastest for local iteration)
+act -j build-linux
+
+# With cache persistence (create cache dirs first)
+mkdir -p ~/.cache/act-cargo ~/.cache/act-pnpm
+act -j build-linux --bind ~/.cache/act-cargo:/root/.cargo --bind ~/.cache/act-pnpm:/root/.local/share/pnpm
+
+# Use a pre-built image with dependencies already installed
+act -j build-linux -P ubuntu-22.04=catthehacker/ubuntu:act-22.04
+```
+
+**Note:** `act` doesn't persist caches between runs by default. First run will be slow (cold cache), but caching actions help on GitHub Actions where caches are persisted.
+
 ## License
 
 MIT
