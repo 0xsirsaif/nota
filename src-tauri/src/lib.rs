@@ -3,6 +3,7 @@ pub mod db;
 pub mod error;
 pub mod models;
 
+#[cfg(desktop)]
 use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
 
 #[tauri::command]
@@ -56,7 +57,7 @@ fn setup_desktop_menu(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Er
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
