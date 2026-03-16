@@ -24,6 +24,9 @@ thiserror = "1"
 uuid = { version = "1", features = ["v4"] }
 slug = "0.1"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono", "migrate"] }
+sqlx-sqlite = { version = "0.8", features = ["bundled"] }
+tauri-plugin-haptics = "2"
+tauri-plugin-os = "2"
 open = "5"
 reqwest = { version = "0.12", features = ["json"] }
 regex = "1"

@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Mobile capabilities for Android and iOS",
+  "platforms": ["android", "iOS"],
+  "permissions": [
+    "core:default",
+    "store:default",
+    "fs:default",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "$APPLOCALDATA/**" }]
+    },
+    "notification:default",
+    "haptics:default",
+    "os:default"
+  ]
+}

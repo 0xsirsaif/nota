@@ -5,63 +5,83 @@ pub mod models;
 
 use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
 
-
 #[tauri::command]
 async fn greet(name: String) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[cfg(desktop)]
+fn setup_desktop_menu(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // Create menu with standard edit commands
+    // macOS has different menu conventions - Edit menu is standard
+    #[cfg(target_os = "macos")]
+    let edit_menu = {
+        let submenu = Submenu::with_items(
+            app.handle(),
+            "Edit",
+            true,
+            &[
+                &PredefinedMenuItem::undo(app.handle(), None::<&str>)?,
+                &PredefinedMenuItem::redo(app.handle(), None::<&str>)?,
+                &PredefinedMenuItem::separator(app.handle())?,
+                &PredefinedMenuItem::cut(app.handle(), None::<&str>)?,
+                &PredefinedMenuItem::copy(app.handle(), None::<&str>)?,
+                &PredefinedMenuItem::paste(app.handle(), None::<&str>)?,
+                &PredefinedMenuItem::select_all(app.handle(), None::<&str>)?,
+            ],
+        )?;
+        submenu
+    };
+
+    #[cfg(not(target_os = "macos"))]
+    let edit_menu = Submenu::with_items(
+        app.handle(),
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app.handle(), None::<&str>)?,
+            &PredefinedMenuItem::separator(app.handle())?,
+            &PredefinedMenuItem::cut(app.handle(), None::<&str>)?,
+            &PredefinedMenuItem::copy(app.handle(), None::<&str>)?,
+            &PredefinedMenuItem::paste(app.handle(), None::<&str>)?,
+            &PredefinedMenuItem::select_all(app.handle(), None::<&str>)?,
+        ],
+    )?;
+
+    let menu = Menu::with_items(app.handle(), &[&edit_menu])?;
+    app.set_menu(menu)?;
+
+    Ok(())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
-        // .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_os::init());
+
+    // Add mobile-specific plugins
+    #[cfg(mobile)]
+    {
+        builder = builder.plugin(tauri_plugin_haptics::init());
+    }
+
+    builder
         .setup(|app| {
             let handle = app.handle().clone();
 
+            // Desktop-only menu setup
+            #[cfg(desktop)]
+            {
+                if let Err(e) = setup_desktop_menu(app) {
+                    eprintln!("Failed to setup desktop menu: {}", e);
+                }
+            }
 
-            // Create menu with standard edit commands
-            // macOS has different menu conventions - Edit menu is standard
-            #[cfg(target_os = "macos")]
-            let edit_menu = {
-                let submenu = Submenu::with_items(
-                    app.handle(),
-                    "Edit",
-                    true,
-                    &[
-                        &PredefinedMenuItem::undo(app.handle(), None::<&str>)?,
-                        &PredefinedMenuItem::redo(app.handle(), None::<&str>)?,
-                        &PredefinedMenuItem::separator(app.handle())?,
-                        &PredefinedMenuItem::cut(app.handle(), None::<&str>)?,
-                        &PredefinedMenuItem::copy(app.handle(), None::<&str>)?,
-                        &PredefinedMenuItem::paste(app.handle(), None::<&str>)?,
-                        &PredefinedMenuItem::select_all(app.handle(), None::<&str>)?,
-                    ],
-                )?;
-                submenu
-            };
-
-            #[cfg(not(target_os = "macos"))]
-            let edit_menu = Submenu::with_items(
-                app.handle(),
-                "Edit",
-                true,
-                &[
-                    &PredefinedMenuItem::undo(app.handle(), None::<&str>)?,
-                    &PredefinedMenuItem::separator(app.handle())?,
-                    &PredefinedMenuItem::cut(app.handle(), None::<&str>)?,
-                    &PredefinedMenuItem::copy(app.handle(), None::<&str>)?,
-                    &PredefinedMenuItem::paste(app.handle(), None::<&str>)?,
-                    &PredefinedMenuItem::select_all(app.handle(), None::<&str>)?,
-                ],
-            )?;
-
-            let menu = Menu::with_items(app.handle(), &[&edit_menu])?;
-            app.set_menu(menu)?;
-
-            // Initialize database
+            // Initialize database (works on all platforms)
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = db::init(&handle).await {
                     eprintln!("Failed to initialize database: {}", e);

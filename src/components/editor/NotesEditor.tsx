@@ -4,38 +4,28 @@ import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Highlight from "@tiptap/extension-highlight";
-import Underline from "@tiptap/extension-underline";
-import Placeholder from "@tiptap/extension-placeholder";
-import {
-  Bold,
-  Italic,
-  Underline as UnderlineIcon,
-  Heading1,
-  Heading2,
-  List,
-  ListOrdered,
-  CheckSquare,
-  Highlighter,
-  Quote,
-  Code,
-  Undo,
-  Redo,
-  Loader2,
-  Maximize2,
-  Minimize2
-} from "lucide-react";
+import { Markdown } from "tiptap-markdown";
+import { Loader2, Maximize2, Minimize2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { readMarkdownFile, writeMarkdownFile } from "@/lib/tauri";
 import { useEditorStore } from "@/stores/editorStore";
+import { WikiLink } from "./extensions/WikiLink";
+import { Tag } from "./extensions/Tag";
 
 interface NotesEditorProps {
   filePath: string;
   autoSaveInterval?: number;
+  onWikiLinkClick?: (noteName: string) => void;
+  onTagClick?: (tag: string) => void;
 }
 
-export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorProps) {
+export function NotesEditor({
+  filePath,
+  autoSaveInterval = 2000,
+  onWikiLinkClick,
+  onTagClick,
+}: NotesEditorProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -56,15 +46,68 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
         nested: true,
       }),
       Highlight,
-      Underline,
-      Placeholder.configure({
-        placeholder: "Start writing your notes...",
+      // Markdown extension - stores content as pure markdown
+      Markdown.configure({
+        html: false,
+        tightLists: true,
+        bulletListMarker: "-",
+        linkify: true,
+        breaks: true,
+        transformPastedText: true,
+        transformCopiedText: true,
+      }),
+      // Wiki links [[Note Name]]
+      WikiLink.configure({
+        HTMLAttributes: {
+          class: "wiki-link",
+        },
+        onWikiLinkClick,
+      }),
+      // Tags #tag
+      Tag.configure({
+        HTMLAttributes: {
+          class: "tag-mark",
+        },
+        onTagClick,
       }),
     ],
     content: "",
     editorProps: {
       attributes: {
-        class: "prose dark:prose-invert max-w-none focus:outline-none min-h-full",
+        class: cn(
+          "prose dark:prose-invert max-w-none focus:outline-none min-h-full",
+          "prose-headings:tracking-tight prose-headings:font-semibold",
+          "prose-h1:text-xl prose-h1:mb-4 prose-h1:mt-6",
+          "prose-h2:text-lg prose-h2:mb-3 prose-h2:mt-5",
+          "prose-h3:text-base prose-h3:mb-2 prose-h3:mt-4",
+          "prose-p:mb-3 prose-p:leading-relaxed",
+          "prose-blockquote:border-l prose-blockquote:border-muted-foreground/30 prose-blockquote:pl-4 prose-blockquote:my-4 prose-blockquote:text-muted-foreground",
+          "prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-[13px] prose-code:font-mono",
+          "prose-pre:bg-muted prose-pre:p-4 prose-pre:rounded-lg prose-pre:my-4",
+          "prose-ul:list-disc prose-ul:pl-5 prose-ul:mb-3",
+          "prose-ol:list-decimal prose-ol:pl-5 prose-ol:mb-3",
+          "prose-li:mb-1"
+        ),
+      },
+      handleClickOn(_view, _pos, _node, _nodePos, event) {
+        // Handle wiki link clicks
+        const target = event.target as HTMLElement;
+        if (target?.hasAttribute?.("data-wiki-link")) {
+          const noteName = target.getAttribute("data-note-name");
+          if (noteName && onWikiLinkClick) {
+            onWikiLinkClick(noteName);
+            return true;
+          }
+        }
+        // Handle tag clicks
+        if (target?.hasAttribute?.("data-tag")) {
+          const tag = target.getAttribute("data-tag");
+          if (tag && onTagClick) {
+            onTagClick(tag);
+            return true;
+          }
+        }
+        return false;
       },
     },
     onUpdate: () => {
@@ -72,7 +115,7 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
     },
   });
 
-  // Load initial content
+  // Load initial content as markdown
   useEffect(() => {
     if (!editor || !filePath) return;
 
@@ -81,6 +124,7 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
       setError(null);
       try {
         const content = await readMarkdownFile(filePath);
+        // Set content as markdown - tiptap-markdown will parse it
         editor.commands.setContent(content);
       } catch (err) {
         console.error("Failed to load notes:", err);
@@ -100,7 +144,8 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
 
     const saveFn = async () => {
       if (editor.isDestroyed) return;
-      const content = editor.storage.markdown?.getMarkdown?.() || editor.getText();
+      // Get markdown content from storage
+      const content = (editor.storage.markdown?.getMarkdown?.() as string) || editor.getText();
       await performSave(content);
     };
 
@@ -108,21 +153,24 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
     return () => unregisterEditor(filePath);
   }, [editor, filePath, registerEditor, unregisterEditor]);
 
-  const performSave = async (content: string) => {
-    if (!filePath || isSaving) return;
+  const performSave = useCallback(
+    async (content: string) => {
+      if (!filePath || isSaving) return;
 
-    setIsSaving(true);
-    try {
-      await writeMarkdownFile(filePath, content);
-      setLastSaved(new Date());
-      setError(null);
-    } catch (err) {
-      console.error("Failed to save notes:", err);
-      setError("Failed to save");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+      setIsSaving(true);
+      try {
+        await writeMarkdownFile(filePath, content);
+        setLastSaved(new Date());
+        setError(null);
+      } catch (err) {
+        console.error("Failed to save notes:", err);
+        setError("Failed to save");
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [filePath, isSaving]
+  );
 
   const scheduleSave = useCallback(() => {
     if (saveTimeoutRef.current) {
@@ -130,11 +178,12 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
     }
     saveTimeoutRef.current = setTimeout(() => {
       if (editor && !editor.isDestroyed) {
-        const content = editor.getHTML();
+        // Save as markdown
+        const content = editor.storage.markdown?.getMarkdown?.() || "";
         performSave(content);
       }
     }, autoSaveInterval);
-  }, [editor, autoSaveInterval]);
+  }, [editor, autoSaveInterval, performSave]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -150,8 +199,24 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
     if (!editor) return;
 
     const proseClasses = isFullscreen
-      ? "prose prose-lg dark:prose-invert max-w-none focus:outline-none min-h-full px-8 py-8"
-      : "prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[300px] px-4 py-3";
+      ? cn(
+          "prose dark:prose-invert prose-lg max-w-none focus:outline-none min-h-full",
+          "prose-headings:tracking-tight prose-headings:font-semibold",
+          "prose-h1:text-2xl prose-h1:mb-6 prose-h1:mt-8",
+          "prose-h2:text-xl prose-h2:mb-4 prose-h2:mt-6",
+          "prose-h3:text-lg prose-h3:mb-3 prose-h3:mt-5",
+          "prose-p:mb-4 prose-p:leading-relaxed",
+          "px-8 py-8"
+        )
+      : cn(
+          "prose dark:prose-invert prose-sm max-w-none focus:outline-none min-h-[300px]",
+          "prose-headings:tracking-tight prose-headings:font-semibold",
+          "prose-h1:text-xl prose-h1:mb-4 prose-h1:mt-6",
+          "prose-h2:text-lg prose-h2:mb-3 prose-h2:mt-5",
+          "prose-h3:text-base prose-h3:mb-2 prose-h3:mt-4",
+          "prose-p:mb-3 prose-p:leading-relaxed",
+          "px-4 py-3"
+        );
 
     editor.setOptions({
       editorProps: {
@@ -162,7 +227,7 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
     });
   }, [isFullscreen, editor]);
 
-  // Keyboard shortcut for fullscreen
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Esc to exit fullscreen
@@ -180,37 +245,17 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isFullscreen]);
 
-  // Manual save handler
-  const handleManualSave = async () => {
+  // Manual save handler - saves as markdown
+  const handleManualSave = useCallback(async () => {
     if (!editor || editor.isDestroyed) return;
 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    const content = editor.getHTML();
+    const content = editor.storage.markdown?.getMarkdown?.() || "";
     await performSave(content);
-  };
-
-  const toolbarButton = (
-    command: () => boolean,
-    isActive: boolean,
-    icon: React.ReactNode,
-    title: string
-  ) => (
-    <Button
-      variant="ghost"
-      size="icon"
-      className={cn(
-        "h-7 w-7 rounded-md",
-        isActive && "bg-muted text-foreground"
-      )}
-      onClick={() => command()}
-      title={title}
-    >
-      {icon}
-    </Button>
-  );
+  }, [editor, performSave]);
 
   if (isLoading) {
     return (
@@ -223,150 +268,59 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
   return (
     <div
       className={cn(
-        "bg-background overflow-hidden flex flex-col",
-        isFullscreen
-          ? "fixed inset-0 z-50 rounded-none border-0"
-          : "border rounded-md"
+        "overflow-hidden flex flex-col",
+        isFullscreen ? "fixed inset-0 z-50 bg-background" : "bg-background border rounded-md"
       )}
     >
-      {/* Toolbar */}
+      {/* Header - minimal, no toolbar */}
       <div
         className={cn(
-          "flex items-center gap-0.5 px-2 py-1.5 border-b bg-muted/30 flex-wrap shrink-0",
-          isFullscreen && "px-4 py-2"
+          "flex items-center justify-between px-3 py-2 border-b bg-muted/20 shrink-0",
+          isFullscreen && "absolute top-0 left-0 right-0 z-10 px-6 py-4 border-b-0 bg-transparent opacity-0 hover:opacity-100 transition-opacity"
         )}
       >
-        {/* Text Style */}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleBold().run(),
-          editor.isActive("bold"),
-          <Bold className="h-3.5 w-3.5" />,
-          "Bold (Ctrl+B)"
-        )}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleItalic().run(),
-          editor.isActive("italic"),
-          <Italic className="h-3.5 w-3.5" />,
-          "Italic (Ctrl+I)"
-        )}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleUnderline().run(),
-          editor.isActive("underline"),
-          <UnderlineIcon className="h-3.5 w-3.5" />,
-          "Underline (Ctrl+U)"
-        )}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleHighlight().run(),
-          editor.isActive("highlight"),
-          <Highlighter className="h-3.5 w-3.5" />,
-          "Highlight"
-        )}
-
-        <Separator orientation="vertical" className="h-5 mx-1" />
-
-        {/* Headings */}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
-          editor.isActive("heading", { level: 1 }),
-          <Heading1 className="h-3.5 w-3.5" />,
-          "Heading 1"
-        )}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
-          editor.isActive("heading", { level: 2 }),
-          <Heading2 className="h-3.5 w-3.5" />,
-          "Heading 2"
-        )}
-
-        <Separator orientation="vertical" className="h-5 mx-1" />
-
-        {/* Lists */}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleBulletList().run(),
-          editor.isActive("bulletList"),
-          <List className="h-3.5 w-3.5" />,
-          "Bullet List"
-        )}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleOrderedList().run(),
-          editor.isActive("orderedList"),
-          <ListOrdered className="h-3.5 w-3.5" />,
-          "Numbered List"
-        )}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleTaskList().run(),
-          editor.isActive("taskList"),
-          <CheckSquare className="h-3.5 w-3.5" />,
-          "Task List"
-        )}
-
-        <Separator orientation="vertical" className="h-5 mx-1" />
-
-        {/* Blocks */}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleBlockquote().run(),
-          editor.isActive("blockquote"),
-          <Quote className="h-3.5 w-3.5" />,
-          "Quote"
-        )}
-        {editor && toolbarButton(
-          () => editor.chain().focus().toggleCode().run(),
-          editor.isActive("code"),
-          <Code className="h-3.5 w-3.5" />,
-          "Inline Code"
-        )}
-
-        <div className="flex-1" />
-
-        {/* Fullscreen Toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-7 w-7 rounded-md",
-            isFullscreen && "bg-muted text-foreground"
-          )}
-          onClick={() => setIsFullscreen(!isFullscreen)}
-          title={isFullscreen ? "Exit Fullscreen (Esc)" : "Fullscreen (Ctrl+Shift+F)"}
-        >
+        <div className="flex items-center gap-2">
           {isFullscreen ? (
-            <Minimize2 className="h-3.5 w-3.5" />
+            <span className="text-xs text-muted-foreground">Fullscreen</span>
           ) : (
-            <Maximize2 className="h-3.5 w-3.5" />
+            <>
+              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Notes</span>
+            </>
           )}
-        </Button>
-
-        <Separator orientation="vertical" className="h-5 mx-1" />
-
-        {/* History */}
-        {editor && toolbarButton(
-          () => editor.chain().focus().undo().run(),
-          false,
-          <Undo className="h-3.5 w-3.5" />,
-          "Undo"
-        )}
-        {editor && toolbarButton(
-          () => editor.chain().focus().redo().run(),
-          false,
-          <Redo className="h-3.5 w-3.5" />,
-          "Redo"
-        )}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-7 w-7 rounded-md",
+              isFullscreen && "bg-muted text-foreground"
+            )}
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            title={isFullscreen ? "Exit Fullscreen (Esc)" : "Fullscreen (Ctrl+Shift+F)"}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Editor */}
       <div
         className={cn(
           "flex-1 overflow-auto",
-          isFullscreen && "bg-background"
+          isFullscreen && "bg-background h-screen ProseMirror-fullscreen"
         )}
       >
         <EditorContent
           editor={editor}
           className={cn(
             "h-full min-h-full",
-            isFullscreen
-              ? "max-w-[900px] mx-auto px-8 py-8 prose-lg"
-              : "prose-sm"
+            isFullscreen && "max-w-[75ch] mx-auto"
           )}
         />
       </div>
@@ -375,7 +329,7 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
       <div
         className={cn(
           "flex items-center justify-between px-3 py-1.5 border-t bg-muted/20 text-xs text-muted-foreground shrink-0",
-          isFullscreen && "px-4"
+          isFullscreen && "absolute bottom-0 left-0 right-0 z-10 px-6 py-3 border-t-0 bg-transparent opacity-0 hover:opacity-100 transition-opacity"
         )}
       >
         <div className="flex items-center gap-2">
@@ -392,7 +346,7 @@ export function NotesEditor({ filePath, autoSaveInterval = 2000 }: NotesEditorPr
             <span>Unsaved</span>
           )}
           {isFullscreen && (
-            <span className="text-muted-foreground/60">• Press Esc to exit</span>
+            <span className="text-muted-foreground/60">· Press Esc to exit</span>
           )}
         </div>
         <div className="flex items-center gap-2">

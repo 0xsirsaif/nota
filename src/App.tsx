@@ -10,6 +10,8 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/comp
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useSessionStore, useSettingsStore, useUIStore, useTimerStore } from "@/stores";
 import { useTheme } from "@/hooks/useTheme";
+import { useMobile } from "@/hooks/useMobile";
+import { MobileHeader, MobileLayout } from "@/components/mobile";
 import "./index.css";
 
 // Minimal custom titlebar for Linux
@@ -90,11 +92,24 @@ function ErrorBanner() {
   );
 }
 
+function DesktopLayout() {
+  return (
+    <>
+      <div className="flex-1 flex overflow-hidden">
+        <Sidebar />
+        <Workspace />
+        <Inspector />
+      </div>
+    </>
+  );
+}
+
 function AppContent() {
   const { loadSessions } = useSessionStore();
   const { loadSettings } = useSettingsStore();
   const { restore } = useTimerStore();
   const { toggleFocusMode } = useUIStore();
+  const { isMobile } = useMobile();
 
   // Initialize theme
   useTheme();
@@ -106,8 +121,10 @@ function AppContent() {
     restore(); // Restore timer state from backend
   }, [loadSessions, loadSettings, restore]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (desktop only)
   useEffect(() => {
+    if (isMobile) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept if user is typing in an input/textarea
       const target = e.target as HTMLElement;
@@ -128,29 +145,25 @@ function AppContent() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleFocusMode]);
+  }, [toggleFocusMode, isMobile]);
 
   return (
     <TooltipProvider>
       <div className="h-screen w-screen flex flex-col bg-background">
-        {/* Custom Titlebar */}
-        <TitleBar />
+        {/* Platform-specific header */}
+        {isMobile ? <MobileHeader /> : <TitleBar />}
 
         {/* Error Banner */}
         <ErrorBanner />
 
-        {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar />
-          <Workspace />
-          <Inspector />
-        </div>
+        {/* Platform-specific layout */}
+        {isMobile ? <MobileLayout /> : <DesktopLayout />}
       </div>
 
       {/* Modals */}
       <CreateSessionModal />
       <SettingsModal />
-      <FocusMode />
+      {!isMobile && <FocusMode />}
     </TooltipProvider>
   );
 }
