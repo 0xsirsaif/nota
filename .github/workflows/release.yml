@@ -269,10 +269,14 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+
       - name: Install Android NDK
         run: |
-          sdkmanager "ndk;27.0.11956037"
-          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.0.11956037" >> $GITHUB_ENV
+          sdkmanager "ndk;25.2.9519653"
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/25.2.9519653" >> $GITHUB_ENV
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli
